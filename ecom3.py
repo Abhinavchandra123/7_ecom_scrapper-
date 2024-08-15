@@ -73,7 +73,7 @@ class SpeedHobby_Scraper:
 
         extract_all_product_links(url)
 
-    def extract_product_details(product_urls_file, output_file):
+    def extract_product_details(self,product_urls_file, output_file):
         def extract_details(product_url):
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
