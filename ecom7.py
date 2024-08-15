@@ -172,11 +172,16 @@ if __name__ == "__main__":
     url = "https://holte-modelhobby.dk/sitemap/kategorier/"
     collection_file = 'holte-modelhobby_collections.csv'
     product_details_file = "holte-modelhobby_details.csv"
-    
-    # Extract collection links
-    scraper.extract_collection_links(collection_file, url)
-    
-    # Extract product details from collection links
-    scraper.extract_product_details(collection_file, product_details_file)
-    
+    print("Choose an option:")
+    print("1. Extract collection links")
+    print("2. Extract product details from product links")
+    option = input("Enter the option number (1, 2, or 3): ")
+
+    if option == "1":
+        scraper.extract_collection_links(collection_file, url)
+    elif option == "2":
+        scraper.extract_product_details(collection_file, product_details_file)
+    else:
+        print("Invalid option. Please run the script again and choose a valid option.")
+
     scraper.close_driver()

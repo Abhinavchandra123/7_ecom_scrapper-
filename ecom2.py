@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import re
 import requests
 import logging
@@ -41,7 +42,7 @@ class MorfarsScraper:
 
             with open(output_file, "a", newline='', encoding='utf-8') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=['Product Link'])
-                if csvfile.tell() == 0:
+                if csvfile.tell() == 0:  # Check if the file is empty to write the header
                     writer.writeheader()
                 for link in product_links:
                     writer.writerow({'Product Link': link})
@@ -60,6 +61,11 @@ class MorfarsScraper:
 
         def extract_all_product_links(start_url):
             all_links = []
+            
+            # Check if the output file exists and delete it
+            if os.path.exists(output_file):
+                os.remove(output_file)
+            
             self.driver.get(start_url)
             while True:
                 product_links = extract_links_from_page(self.driver.current_url)
@@ -93,7 +99,11 @@ class MorfarsScraper:
                     quantity = variant.get('inventory_quantity', 'N/A')
 
                     if quantity == 'N/A' or int(quantity) <= 0:
-                        self.driver.get(product_url)
+                        try:
+                            self.driver.get(product_url)
+                        except:
+                            time.sleep(5)
+                            self.driver.refresh()
                         try:
                             WebDriverWait(self.driver, 10).until(
                                 EC.presence_of_element_located((By.CSS_SELECTOR, '.product-info__inventory .text-with-icon'))
@@ -146,9 +156,18 @@ class MorfarsScraper:
             writer.writeheader()
 
             for url in product_urls:
-                product_details_list = extract_details(url)
-                for product_details in product_details_list:
-                    writer.writerow(product_details)
+                try:
+                    product_details_list = extract_details(url)
+                    for product_details in product_details_list:
+                        writer.writerow(product_details)
+                except:
+                    try:
+                        time.sleep(30)
+                        product_details_list = extract_details(url)
+                        for product_details in product_details_list:
+                            writer.writerow(product_details)
+                    except Exception as a:
+                        logging.info(f"error while processing url: {url} \n error:{a}")
             logging.info(f"Product details extracted and saved to {output_file}")
 
     def close_driver(self):

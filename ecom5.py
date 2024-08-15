@@ -166,14 +166,22 @@ if __name__ == "__main__":
     product_urls = "hobbykarl_urls.csv"
     product_details = "hobbykarl_details.csv"
     
+    print("Choose an option:")
+    print("1. Extract collection links")
+    print("2. Extract product details from product links")
+    option = input("Enter the option number (1, 2, or 3): ")
+    
     print("Starting HobbyKarlScraper...")
     print("Extracting collection links...")
-    scraper.extract_collection_links(output_file, url)
-    print("Collection links extracted successfully.")
-
-    print("Extracting product details...")
-    scraper.extract_product_details(output_file, product_details)
-    print("Product details extracted successfully.")
+    if option == "1":
+        scraper.extract_collection_links(output_file, url)
+        print("Collection links extracted successfully.")
+    elif option == "2":
+        print("Extracting product details...")
+        scraper.extract_product_details(output_file, product_details)
+        print("Product details extracted successfully.")
+    else:
+        print("Invalid option. Please run the script again and choose a valid option.")
 
     scraper.close_driver()
     print("HobbyKarlScraper execution completed.")
