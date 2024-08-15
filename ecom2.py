@@ -12,6 +12,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+from bs4 import BeautifulSoup
 
 # Configure logging
 logging.basicConfig(
@@ -82,6 +83,36 @@ class MorfarsScraper:
         extract_all_product_links(url)
         
     def extract_product_details(self, product_urls_file, output_file):
+        def fetch_stock_status(product_url):
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+
+            try:
+                response = requests.get(product_url, headers=headers)
+                response.raise_for_status() 
+
+                soup = BeautifulSoup(response.content, 'html.parser')
+                stock_status_element = soup.select_one('.product-info__inventory .text-with-icon')
+                if stock_status_element:
+                    stock_status = stock_status_element.get_text(strip=True)
+                else:
+                    sold_out_badge = soup.select_one('.badge--sold-out')
+                    if sold_out_badge and sold_out_badge.get_text(strip=True):
+                        stock_status = sold_out_badge.get_text(strip=True)
+                    else:
+                        stock_status = 'N/A'
+                if stock_status in ['UDSOLGT', 'Udsolgt']:
+                    available = 'Out of Stock'
+                else:
+                    available = 'In Stock'
+
+                return available
+
+            except requests.RequestException as e:
+                print(f"Error fetching data from {product_url}: {e}")
+                return 'N/A'
+            
         def extract_details(product_url):
             json_url = product_url + ".json"
             response = requests.get(json_url)
@@ -97,32 +128,10 @@ class MorfarsScraper:
                     available = 'In Stock' if variant.get('inventory_management', 'shopify') == 'shopify' else 'Out of Stock'
                     price = variant.get('price', 'N/A')
                     quantity = variant.get('inventory_quantity', 'N/A')
-
+                    
                     if quantity == 'N/A' or int(quantity) <= 0:
-                        try:
-                            self.driver.get(product_url)
-                        except:
-                            time.sleep(5)
-                            self.driver.refresh()
-                        try:
-                            WebDriverWait(self.driver, 10).until(
-                                EC.presence_of_element_located((By.CSS_SELECTOR, '.product-info__inventory .text-with-icon'))
-                            )
-                            stock_status_element = self.driver.find_element(By.CSS_SELECTOR, '.product-info__inventory .text-with-icon')
-                            stock_status = stock_status_element.text if stock_status_element else 'N/A'
-                        except:
-                            try:
-                                sold_out_badge = self.driver.find_element(By.CSS_SELECTOR, '.badge--sold-out')
-                                if sold_out_badge.is_displayed():
-                                    stock_status = sold_out_badge.text
-                                else:
-                                    stock_status = 'N/A'
-                            except:
-                                stock_status = 'N/A'
-                        if stock_status in ['UDSOLGT', 'Udsolgt']:
-                            available = 'Out of Stock'
-                        else:
-                            available = 'In Stock'
+                        available = fetch_stock_status(product_url)
+                        print(f"Product availability: {available}")
                         
                     details.append({
                         'Title': title,
@@ -188,9 +197,13 @@ if __name__ == "__main__":
 
     if option == "1":
         scraper.extract_product_links(url, product_urls)
+        scraper.close_driver()
     elif option == "2":
+        scraper.close_driver()
         scraper.extract_product_details(product_urls, product_details)
+        
     else:
         print("Invalid option. Please run the script again and choose a valid option.")
+        scraper.close_driver()
 
-    scraper.close_driver()
+    
