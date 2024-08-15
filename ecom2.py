@@ -131,7 +131,7 @@ class MorfarsScraper:
                     
                     if quantity == 'N/A' or int(quantity) <= 0:
                         available = fetch_stock_status(product_url)
-                        print(f"Product availability: {available}")
+                        # print(f"Product availability: {available}")
                         
                     details.append({
                         'Title': title,

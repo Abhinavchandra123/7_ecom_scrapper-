@@ -1,6 +1,8 @@
 import csv
 import json
 import logging
+from bs4 import BeautifulSoup
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -69,48 +71,72 @@ class RcklubbenScraper:
 
         extract_all_product_links(url)
 
-    def extract_product_details(self, product_urls_file, output_file):
+    def extract_product_details(product_urls_file, output_file):
         def extract_details(product_url):
-            self.driver.get(product_url)
-            
-            try:
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, '//script[contains(@id, "ProductJson-")]'))
-                )
-                script_element = self.driver.find_element(By.XPATH, '//script[contains(@id, "ProductJson-")]')
-                product_json = script_element.get_attribute('innerHTML')
-                product_data = json.loads(product_json)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
 
-                details = []
-                for variant in product_data['variants']:
-                    details.append({
-                        'Title': product_data['title'],
-                        'Brand': product_data['vendor'],
-                        'Variants': variant['title'],
-                        'SKU': variant['sku'],
-                        'Price': variant['price'],
-                        'Stock Status': 'In Stock' if variant['available'] else 'Out of Stock',
-                        'URL': product_url
-                    })
-                logging.info(f"Extracted details for {product_url}.")
-                return details
+            # Try to fetch and parse the product details
+            for attempt in range(2):  # Try up to 2 times
+                try:
+                    response = requests.get(product_url, headers=headers)
+                    response.raise_for_status()  # Check for request errors
 
-            except Exception as e:
-                logging.error(f'Error at {product_url}: {e}')
-                return [{
-                    'Title': 'N/A',
-                    'Brand': 'N/A',
-                    'Variants': 'N/A',
-                    'SKU': 'N/A',
-                    'Price': 'N/A',
-                    'Stock Status': 'N/A',
-                    'URL': product_url
-                }]
+                    soup = BeautifulSoup(response.content, 'html.parser')
+
+                    # Extract JSON data embedded in a <script> tag
+                    script_element = soup.find('script', {'id': lambda x: x and 'ProductJson-' in x})
+                    if script_element:
+                        product_json = script_element.string
+                        product_data = json.loads(product_json)
+
+                        details = []
+                        for variant in product_data['variants']:
+                            details.append({
+                                'Title': product_data['title'],
+                                'Brand': product_data['vendor'],
+                                'Variants': variant['title'],
+                                'SKU': variant['sku'],
+                                'Price': f"Rs. {variant['price'] / 100:.2f}",  # Formatting price
+                                'Stock Status': 'In Stock' if variant['available'] else 'Out of Stock',
+                                'URL': product_url
+                            })
+                        logging.info(f"Extracted details for {product_url}.")
+                        return details
+                    else:
+                        logging.error(f'No product JSON found at {product_url}')
+                        return [{
+                            'Title': 'N/A',
+                            'Brand': 'N/A',
+                            'Variants': 'N/A',
+                            'SKU': 'N/A',
+                            'Price': 'N/A',
+                            'Stock Status': 'N/A',
+                            'URL': product_url
+                        }]
+
+                except Exception as e:
+                    logging.error(f'Error extracting details from {product_url} on attempt {attempt+1}: {e}')
+                    if attempt == 0:  # Wait before retrying only after the first attempt
+                        time.sleep(20)
+
+            # If all attempts fail
+            logging.error(f'Failed to extract details from {product_url} after multiple attempts.')
+            return [{
+                'Title': 'N/A',
+                'Brand': 'N/A',
+                'Variants': 'N/A',
+                'SKU': 'N/A',
+                'Price': 'N/A',
+                'Stock Status': 'N/A',
+                'URL': product_url
+            }]
 
         with open(product_urls_file, "r") as file:
             reader = csv.DictReader(file)
             product_urls = [row['Product Link'] for row in reader]
-            
+
         with open(output_file, "w", newline='', encoding='utf-8') as csvfile:
             fieldnames = ['Title', 'Brand', 'Variants', 'SKU', 'Price', 'Stock Status', 'URL']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -120,6 +146,7 @@ class RcklubbenScraper:
                 product_details = extract_details(url)
                 for detail in product_details:
                     writer.writerow(detail)
+            logging.info(f"Product details extracted and saved to {output_file}")
 
     def close_driver(self):
         self.driver.quit()
@@ -139,12 +166,15 @@ if __name__ == "__main__":
     if option == "1":
         print("Extracting product links...")
         scraper.extract_product_links(url, product_urls)
+        scraper.close_driver()
     elif option == "2":
         print("Extracting product details...")
+        scraper.close_driver()
         scraper.extract_product_details(product_urls, product_details)
     else:
         print("Invalid option. Please run the script again and choose a valid option.")
+        scraper.close_driver()
 
-    scraper.close_driver()
+    
     print("RcklubbenScraper execution completed.")
     
