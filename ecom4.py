@@ -157,23 +157,25 @@ if __name__ == "__main__":
     url = 'https://rcklubben.dk/collections/all'
     product_urls = "rcklubben_product_urls.csv"
     product_details = "rcklubben_product_details.csv"
-    
-    print("Choose an option:")
-    print("1. Extract product links from collection links")
-    print("2. Extract product details from product links")
-    option = input("Enter the option number (1, 2): ")
+    scraper.extract_product_links(url, product_urls)
+    scraper.close_driver()
+    scraper.extract_product_details(product_urls, product_details)
+    # print("Choose an option:")
+    # print("1. Extract product links from collection links")
+    # print("2. Extract product details from product links")
+    # option = input("Enter the option number (1, 2): ")
 
-    if option == "1":
-        print("Extracting product links...")
-        scraper.extract_product_links(url, product_urls)
-        scraper.close_driver()
-    elif option == "2":
-        print("Extracting product details...")
-        scraper.close_driver()
-        scraper.extract_product_details(product_urls, product_details)
-    else:
-        print("Invalid option. Please run the script again and choose a valid option.")
-        scraper.close_driver()
+    # if option == "1":
+    #     print("Extracting product links...")
+    #     scraper.extract_product_links(url, product_urls)
+    #     scraper.close_driver()
+    # elif option == "2":
+    #     print("Extracting product details...")
+    #     scraper.close_driver()
+    #     scraper.extract_product_details(product_urls, product_details)
+    # else:
+    #     print("Invalid option. Please run the script again and choose a valid option.")
+    #     scraper.close_driver()
 
     
     print("RcklubbenScraper execution completed.")
