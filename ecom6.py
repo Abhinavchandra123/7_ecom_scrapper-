@@ -76,38 +76,50 @@ class ModelSportScraper:
         
         logging.info(f"Extracted {len(all_links)} collection links.")
 
-    def get_product_links(self, collection_file, output_file):
+    def get_product_links(self, output_file):
         product_links = []
+        sitemap_url = "https://modelsport.dk/sitemap/produkter/"
+        self.driver.get(sitemap_url)
+        time.sleep(3)  # Allow the page to fully load
+        page_count = 1
 
-        with open(collection_file, 'r') as file:
-            reader = csv.reader(file)
-            collection_urls = [row[0] for row in reader]
+        while True:
+            try:
+                logging.info(f"Processing page {page_count}...")
 
-        for url in collection_urls:
-            self.driver.get(url.strip())
-            time.sleep(3)
+                # Find all product links within the specified <ul> element
+                product_list = self.driver.find_element(By.CSS_SELECTOR, '.m-sitemap-prod.m-links.list-unstyled')
+                product_items = product_list.find_elements(By.CSS_SELECTOR, 'li.m-sitemap-prod-item.m-links-prod a')
+                
+                page_links = [item.get_attribute('href') for item in product_items]
+                product_links.extend(page_links)
 
-            while True:
-                products = self.driver.find_elements(By.CSS_SELECTOR, '.productItem .productContent .product-description .m-productlist-heading a.is-block.m-productlist-link')
-                for product in products:
-                    product_link = product.get_attribute('href')
-                    product_links.append(product_link)
+                logging.info(f"Extracted {len(page_links)} product links from page {page_count}.")
 
-                try:
-                    next_button = self.driver.find_element(By.CSS_SELECTOR, '.productpagination .pagination li:not(.is-disabled) a[data-ng-click*="next"]')
-                    next_button.click()
-                    time.sleep(3)
-                    WebDriverWait(self.driver, 10).until(EC.staleness_of(products[0]))
-                except Exception as e:
-                    logging.info("Pagination ended or error: " + str(e))
-                    break
+                # Check if there is a "next" button and click it
+                # try:
+                #     next_button = self.driver.find_element(By.CSS_SELECTOR, '.w-pagination-list a[rel="next"]')
+                #     if next_button:
+                #         next_button.click()
+                #         time.sleep(3)  # Wait for the next page to load
+                #         page_count += 1
+                #     else:
+                #         break  # Exit the loop if there is no "next" button
+                # except Exception as a:
+                #     logging.error(f"Error occurred on page {page_count}: cant find next button")
+                break
 
+            except Exception as e:
+                logging.error(f"Error occurred on page {page_count}: {str(e)}")
+                break
+
+        # Save the extracted links to the output file
         with open(output_file, 'w', newline='') as file:
             writer = csv.writer(file)
             for link in product_links:
                 writer.writerow([link])
-        
-        logging.info(f"Extracted {len(product_links)} product links.")
+
+        logging.info(f"Total of {len(product_links)} product links extracted.")
 
     def extract_product_details(self, product_urls, output_file):
         with open(product_urls, 'r') as file:
@@ -182,10 +194,12 @@ class ModelSportScraper:
                                 except Exception:
                                     stock_status = "N/A"
                                 writer.writerow([title, brand, variant_sku, variant_price, stock_status, url])
+                                logging.info(f"Extracted data from :{url}")
                             except Exception as e:
                                 logging.error(f"Error extracting variant details for {url}: {e}")
                     else:
                         writer.writerow([title, brand, sku, base_price, stock_status, url])
+                        logging.info(f"Extracted data from :{url}")
 
                 except Exception as e:
                     logging.error(f"Error extracting details for {url}: {e}")
@@ -204,17 +218,18 @@ if __name__ == "__main__":
     product_details = "modelsport_details.csv"
     
     print("Choose an option:")
-    print("1. Extract collection links")
-    print("2. Extract product links from collection links")
+    print("1. Extract product links and product details")
+    print("2. Extract product links")
     print("3. Extract product details from product links")
     option = input("Enter the option number (1, 2, or 3): ")
 
     if option == "1":
-        scraper.extract_collection_links(output_file, url)
+        scraper.get_product_links(output_file)
+        scraper.extract_product_details(output_file, product_details)
     elif option == "2":
-        scraper.get_product_links(output_file, product_urls)
+        scraper.get_product_links(output_file)
     elif option == "3":
-        scraper.extract_product_details(product_urls, product_details)
+        scraper.extract_product_details(output_file, product_details)
     else:
         print("Invalid option. Please run the script again and choose a valid option.")
 
