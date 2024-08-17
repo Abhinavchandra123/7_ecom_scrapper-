@@ -2,6 +2,7 @@ import csv
 import gc
 import json
 import logging
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -109,7 +110,6 @@ class ModelSportScraper:
                 product_links.extend(page_links)
 
                 logging.info(f"Extracted {len(page_links)} product links from page {page_count}.")
-
                 # Check if there is a "next" button and click it
                 try:
                     next_button = self.driver.find_element(By.CSS_SELECTOR, '.w-pagination-list a[rel="next"]')
@@ -135,48 +135,54 @@ class ModelSportScraper:
 
         logging.info(f"Total of {len(product_links)} product links extracted.")
 
-    def extract_product_details(self, product_urls, output_file):
+    def extract_product_details(self, product_urls, output_file, batch_size=500):
+        # Delete the file if it already exists
+        if os.path.exists(output_file):
+            os.remove(output_file)
+
+        # Read product URLs from file
         with open(product_urls, 'r') as file:
             product_urls = [line.strip() for line in file]
 
-        with open(output_file, 'w', newline='', encoding='utf-8') as file:
+        # Open output file in append mode to save batch results
+        with open(output_file, 'a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
+            # Only write the header if the file is empty
             if file.tell() == 0:
                 writer.writerow(['Title', 'Brand', 'SKU', 'Price', 'Stock Status', 'URL'])
 
-            for url in product_urls:
-                self.driver.get(url)
-                WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+            # Process URLs in batches
+            for i in range(0, len(product_urls), batch_size):
+                batch_urls = product_urls[i:i + batch_size]
+                self.process_batch(batch_urls, writer)
+                gc.collect()  # Force garbage collection after each batch
 
-                try:
-                    title = self.get_element_text(By.CSS_SELECTOR, 'h1.m-product-title.product-title', default="N/A")
-                    brand = self.get_element_attribute(By.CSS_SELECTOR, 'p.m-product-brand a.m-product-brand-link', 'title', default="N/A").split(': ')[-1]
-                    base_price = self.get_element_attribute(By.CSS_SELECTOR, 'meta[itemprop="price"]', 'content', default="N/A")
-                    sku = self.get_element_text(By.CSS_SELECTOR, 'span.m-product-itemNumber-value', default="N/A")
-                    stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.m-product-stock-text')
+    def process_batch(self, batch_urls, writer):
+        for url in batch_urls:
+            self.driver.get(url)
+            WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+            try:
+                title = self.get_element_text(By.CSS_SELECTOR, 'h1.m-product-title.product-title', default="N/A")
+                brand = self.get_element_attribute(By.CSS_SELECTOR, 'p.m-product-brand a.m-product-brand-link', 'title', default="N/A").split(': ')[-1]
+                base_price = self.get_element_attribute(By.CSS_SELECTOR, 'meta[itemprop="price"]', 'content', default="N/A")
+                sku = self.get_element_text(By.CSS_SELECTOR, 'span.m-product-itemNumber-value', default="N/A")
+                stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.m-product-stock-text')
 
-                    variants = self.driver.find_elements(By.CSS_SELECTOR, 'div.m-product-buttons-list-button.data')
-                    if variants:
-                        for variant in variants:
-                            variant.find_element(By.TAG_NAME, 'label').click()
-                            time.sleep(1)  # Adjust or remove sleep
-                            variant_price = self.get_element_text(By.CSS_SELECTOR, 'span.selected-priceLine .price', default="N/A")
-                            variant_sku = self.get_element_text(By.CSS_SELECTOR, 'span.product-itemNumber-value.selected-itemNumber-value', default="N/A")
-                            variant_stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.product-stock-text.selected-stock-text')
-                            writer.writerow([title, brand, variant_sku, variant_price, variant_stock_status, url])
-                    else:
-                        writer.writerow([title, brand, sku, base_price, stock_status, url])
+                variants = self.driver.find_elements(By.CSS_SELECTOR, 'div.m-product-buttons-list-button.data')
+                if variants:
+                    for variant in variants:
+                        variant.find_element(By.TAG_NAME, 'label').click()
+                        time.sleep(1)  # Adjust or remove sleep
+                        variant_price = self.get_element_text(By.CSS_SELECTOR, 'span.selected-priceLine .price', default="N/A")
+                        variant_sku = self.get_element_text(By.CSS_SELECTOR, 'span.product-itemNumber-value.selected-itemNumber-value', default="N/A")
+                        variant_stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.product-stock-text.selected-stock-text')
+                        writer.writerow([title, brand, variant_sku, variant_price, variant_stock_status, url])
+                else:
+                    writer.writerow([title, brand, sku, base_price, stock_status, url])
 
-                    # Clear large variables
-                    variants = None
-                    # self.driver.delete_all_cookies()  # Clears session cookies to reduce memory usage
-                    gc.collect()
-
-                except Exception as e:
-                    logging.error(f"Error extracting details for {url}: {e}")
-                    continue
-
-        logging.info(f"Extracted product details for {len(product_urls)} products.")
+            except Exception as e:
+                logging.error(f"Error extracting details for {url}: {e}")
+                continue
 
     # Helper functions for element extraction
     def get_element_text(self, by, selector, default=""):
