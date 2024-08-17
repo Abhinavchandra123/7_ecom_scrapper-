@@ -97,17 +97,17 @@ class ModelSportScraper:
                 logging.info(f"Extracted {len(page_links)} product links from page {page_count}.")
 
                 # Check if there is a "next" button and click it
-                # try:
-                #     next_button = self.driver.find_element(By.CSS_SELECTOR, '.w-pagination-list a[rel="next"]')
-                #     if next_button:
-                #         next_button.click()
-                #         time.sleep(3)  # Wait for the next page to load
-                #         page_count += 1
-                #     else:
-                #         break  # Exit the loop if there is no "next" button
-                # except Exception as a:
-                #     logging.error(f"Error occurred on page {page_count}: cant find next button")
-                break
+                try:
+                    next_button = self.driver.find_element(By.CSS_SELECTOR, '.w-pagination-list a[rel="next"]')
+                    if next_button:
+                        next_button.click()
+                        time.sleep(3)  # Wait for the next page to load
+                        page_count += 1
+                    else:
+                        break  # Exit the loop if there is no "next" button
+                except Exception as a:
+                    logging.error(f"Error occurred on page {page_count}: cant find next button")
+                    break
 
             except Exception as e:
                 logging.error(f"Error occurred on page {page_count}: {str(e)}")
