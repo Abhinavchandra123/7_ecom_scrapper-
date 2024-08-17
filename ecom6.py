@@ -159,8 +159,23 @@ class ModelSportScraper:
 
     def process_batch(self, batch_urls, writer):
         for url in batch_urls:
-            self.driver.get(url)
-            WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+            try:
+                self.driver.get(url)
+                WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+            except:
+                logging.error(f"Error extracting details for {url}: trying again 1")
+                try:
+                    self.driver.refresh()
+                    WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+                except:
+                    logging.error(f"trying again 2")
+                    try:
+                        time.sleep(3)
+                        self.driver.get(url)
+                        WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+                    except Exception as a:
+                        logging.error(f"Error extracting details for {url} skipping \n error: {e}")
+                        continue
             try:
                 title = self.get_element_text(By.CSS_SELECTOR, 'h1.m-product-title.product-title', default="N/A")
                 brand = self.get_element_attribute(By.CSS_SELECTOR, 'p.m-product-brand a.m-product-brand-link', 'title', default="N/A").split(': ')[-1]
