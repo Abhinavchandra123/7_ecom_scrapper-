@@ -1,4 +1,5 @@
 import csv
+import gc
 import json
 import logging
 from selenium import webdriver
@@ -25,10 +26,23 @@ class ModelSportScraper:
         options.add_argument("--disable-gpu")
         # options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        # options.add_argument("--single-process")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--window-size=800x600")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        options.add_argument("--disable-renderer-backgrounding")
+        options.add_argument("--blink-settings=imagesEnabled=false")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--disable-notifications")
+        options.add_argument("--no-first-run")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36")
         # **********************************************************************
         
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-        self.driver.set_window_size(1920, 1080)
+        # self.driver.set_window_size(1920, 1080)
         
         self.driver.get("https://modelsport.dk/")
         time.sleep(4)
@@ -127,85 +141,67 @@ class ModelSportScraper:
 
         with open(output_file, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            
             if file.tell() == 0:
                 writer.writerow(['Title', 'Brand', 'SKU', 'Price', 'Stock Status', 'URL'])
 
             for url in product_urls:
                 self.driver.get(url)
-                WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
-                time.sleep(2)
+                WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
+
                 try:
-                    try:
-                        title = self.driver.find_element(By.CSS_SELECTOR, 'h1.m-product-title.product-title').text
-                    except Exception:
-                        title = "N/A"
+                    title = self.get_element_text(By.CSS_SELECTOR, 'h1.m-product-title.product-title', default="N/A")
+                    brand = self.get_element_attribute(By.CSS_SELECTOR, 'p.m-product-brand a.m-product-brand-link', 'title', default="N/A").split(': ')[-1]
+                    base_price = self.get_element_attribute(By.CSS_SELECTOR, 'meta[itemprop="price"]', 'content', default="N/A")
+                    sku = self.get_element_text(By.CSS_SELECTOR, 'span.m-product-itemNumber-value', default="N/A")
+                    stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.m-product-stock-text')
 
-                    try:
-                        brand_element = self.driver.find_element(By.CSS_SELECTOR, 'p.m-product-brand a.m-product-brand-link')
-                        brand = brand_element.get_attribute('title').split(': ')[1]
-                    except Exception:
-                        brand = "N/A"
-
-                    try:
-                        base_price = self.driver.find_element(By.CSS_SELECTOR, 'meta[itemprop="price"]').get_attribute('content')
-                    except Exception:
-                        base_price = "N/A"
-
-                    try:
-                        sku_element = self.driver.find_element(By.CSS_SELECTOR, 'span.m-product-itemNumber-value')
-                        sku = sku_element.text
-                    except Exception:
-                        sku = "N/A"
-
-                    try:
-                        stock_element = self.driver.find_element(By.CSS_SELECTOR, 'span.m-product-stock-text')
-                        stock_status = stock_element.text
-                        if "Ikke på lager" in stock_status:
-                            stock_status = "Out of Stock"
-                        elif "På Lager" in stock_status:
-                            stock_status = "In Stock"
-                    except Exception:
-                        stock_status = "N/A"
-                    
                     variants = self.driver.find_elements(By.CSS_SELECTOR, 'div.m-product-buttons-list-button.data')
                     if variants:
                         for variant in variants:
-                            try:
-                                variant_label = variant.find_element(By.TAG_NAME, 'label')
-                                variant_label.click()
-                                time.sleep(2)
-                                try:
-                                    variant_price = self.driver.find_element(By.CSS_SELECTOR, 'span.selected-priceLine .price').text
-                                except Exception:
-                                    variant_price = "N/A"
-
-                                try:
-                                    variant_sku = self.driver.find_element(By.CSS_SELECTOR, 'span.product-itemNumber-value.selected-itemNumber-value').text
-                                except Exception:
-                                    variant_sku = "N/A"
-
-                                try:
-                                    stock_status = self.driver.find_element(By.CSS_SELECTOR, 'span.product-stock-text.selected-stock-text').text
-                                    if "Ikke på lager" in stock_status:
-                                        stock_status = "Out of Stock"
-                                    elif "På Lager" in stock_status:
-                                        stock_status = "In Stock"
-                                except Exception:
-                                    stock_status = "N/A"
-                                writer.writerow([title, brand, variant_sku, variant_price, stock_status, url])
-                                logging.info(f"Extracted data from :{url}")
-                            except Exception as e:
-                                logging.error(f"Error extracting variant details for {url}: {e}")
+                            variant.find_element(By.TAG_NAME, 'label').click()
+                            time.sleep(1)  # Adjust or remove sleep
+                            variant_price = self.get_element_text(By.CSS_SELECTOR, 'span.selected-priceLine .price', default="N/A")
+                            variant_sku = self.get_element_text(By.CSS_SELECTOR, 'span.product-itemNumber-value.selected-itemNumber-value', default="N/A")
+                            variant_stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.product-stock-text.selected-stock-text')
+                            writer.writerow([title, brand, variant_sku, variant_price, variant_stock_status, url])
                     else:
                         writer.writerow([title, brand, sku, base_price, stock_status, url])
-                        logging.info(f"Extracted data from :{url}")
+
+                    # Clear large variables
+                    variants = None
+                    # self.driver.delete_all_cookies()  # Clears session cookies to reduce memory usage
+                    gc.collect()
 
                 except Exception as e:
                     logging.error(f"Error extracting details for {url}: {e}")
+                    continue
 
         logging.info(f"Extracted product details for {len(product_urls)} products.")
 
+    # Helper functions for element extraction
+    def get_element_text(self, by, selector, default=""):
+        try:
+            return self.driver.find_element(by, selector).text
+        except Exception:
+            return default
+
+    def get_element_attribute(self, by, selector, attribute, default=""):
+        try:
+            return self.driver.find_element(by, selector).get_attribute(attribute)
+        except Exception:
+            return default
+
+    def get_stock_status(self, by, selector):
+        try:
+            stock_text = self.driver.find_element(by, selector).text
+            if "Ikke på lager" in stock_text:
+                return "Out of Stock"
+            elif "På Lager" in stock_text:
+                return "In Stock"
+            else:
+                return "N/A"
+        except Exception:
+            return "N/A"
     def close_driver(self):
         self.driver.quit()
 
