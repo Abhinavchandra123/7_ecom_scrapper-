@@ -46,6 +46,7 @@ class HobbyKarlScraper:
 
         with open(output_file, 'w', newline='') as file:
             writer = csv.writer(file)
+            writer.writerow(["Collection Link"])
             for link in all_links:
                 writer.writerow([link])
         
