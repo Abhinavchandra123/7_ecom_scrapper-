@@ -95,14 +95,14 @@ class ModelSportScraper:
         product_links = []
         sitemap_url = "https://modelsport.dk/sitemap/produkter/"
         self.driver.get(sitemap_url)
-        time.sleep(3)  # Allow the page to fully load
+        time.sleep(3)  
         page_count = 1
 
         while True:
             try:
                 logging.info(f"Processing page {page_count}...")
 
-                # Find all product links within the specified <ul> element
+                
                 product_list = self.driver.find_element(By.CSS_SELECTOR, '.m-sitemap-prod.m-links.list-unstyled')
                 product_items = product_list.find_elements(By.CSS_SELECTOR, 'li.m-sitemap-prod-item.m-links-prod a')
                 
@@ -110,15 +110,15 @@ class ModelSportScraper:
                 product_links.extend(page_links)
 
                 logging.info(f"Extracted {len(page_links)} product links from page {page_count}.")
-                # Check if there is a "next" button and click it
+               
                 try:
                     next_button = self.driver.find_element(By.CSS_SELECTOR, '.w-pagination-list a[rel="next"]')
                     if next_button:
                         next_button.click()
-                        time.sleep(3)  # Wait for the next page to load
+                        time.sleep(3)  
                         page_count += 1
                     else:
-                        break  # Exit the loop if there is no "next" button
+                        break 
                 except Exception as a:
                     logging.error(f"Error occurred on page {page_count}: cant find next button")
                     break
@@ -127,7 +127,7 @@ class ModelSportScraper:
                 logging.error(f"Error occurred on page {page_count}: {str(e)}")
                 break
 
-        # Save the extracted links to the output file
+      
         with open(output_file, 'w', newline='') as file:
             writer = csv.writer(file)
             for link in product_links:
@@ -136,26 +136,26 @@ class ModelSportScraper:
         logging.info(f"Total of {len(product_links)} product links extracted.")
 
     def extract_product_details(self, product_urls, output_file, batch_size=500):
-        # Delete the file if it already exists
+      
         if os.path.exists(output_file):
             os.remove(output_file)
 
-        # Read product URLs from file
+      
         with open(product_urls, 'r') as file:
             product_urls = [line.strip() for line in file]
 
-        # Open output file in append mode to save batch results
+        
         with open(output_file, 'a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            # Only write the header if the file is empty
+           
             if file.tell() == 0:
                 writer.writerow(['Title', 'Brand', 'SKU', 'Price', 'Stock Status', 'URL'])
 
-            # Process URLs in batches
+            
             for i in range(0, len(product_urls), batch_size):
                 batch_urls = product_urls[i:i + batch_size]
                 self.process_batch(batch_urls, writer)
-                gc.collect()  # Force garbage collection after each batch
+                gc.collect() 
 
     def process_batch(self, batch_urls, writer):
         for url in batch_urls:
@@ -163,9 +163,11 @@ class ModelSportScraper:
                 self.driver.get(url)
                 WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
             except:
-                logging.error(f"Error extracting details for {url}: trying again 1")
+                logging.error(f"Error extracting details: trying again 1")
                 try:
+                    time.sleep(3)
                     self.driver.refresh()
+                    time.sleep(3)
                     WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
                 except:
                     logging.error(f"trying again 2")
@@ -174,7 +176,7 @@ class ModelSportScraper:
                         self.driver.get(url)
                         WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.ID, 'zoomHook')))
                     except Exception as a:
-                        logging.error(f"Error extracting details for {url} skipping \n error: {e}")
+                        logging.error(f"Error extracting details for {url} skipping \n error: {a}")
                         continue
             try:
                 title = self.get_element_text(By.CSS_SELECTOR, 'h1.m-product-title.product-title', default="N/A")
@@ -186,8 +188,15 @@ class ModelSportScraper:
                 variants = self.driver.find_elements(By.CSS_SELECTOR, 'div.m-product-buttons-list-button.data')
                 if variants:
                     for variant in variants:
-                        variant.find_element(By.TAG_NAME, 'label').click()
-                        time.sleep(1)  # Adjust or remove sleep
+                        try:
+                            variant.find_element(By.TAG_NAME, 'label').click()
+                            time.sleep(1.5)  
+                        except:
+                            try:
+                                variant.find_element(By.TAG_NAME, 'label').click()
+                                time.sleep(1.5)
+                            except Exception as a:
+                                logging.error(f"Error extracting variants details for {url} \n error: {a}")
                         variant_price = self.get_element_text(By.CSS_SELECTOR, 'span.selected-priceLine .price', default="N/A")
                         variant_sku = self.get_element_text(By.CSS_SELECTOR, 'span.product-itemNumber-value.selected-itemNumber-value', default="N/A")
                         variant_stock_status = self.get_stock_status(By.CSS_SELECTOR, 'span.product-stock-text.selected-stock-text')
@@ -199,7 +208,6 @@ class ModelSportScraper:
                 logging.error(f"Error extracting details for {url}: {e}")
                 continue
 
-    # Helper functions for element extraction
     def get_element_text(self, by, selector, default=""):
         try:
             return self.driver.find_element(by, selector).text
